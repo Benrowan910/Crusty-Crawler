@@ -4,8 +4,6 @@
 
 use std::time::{Duration, Instant};
 use sysinfo::Networks;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
 
 async fn network_info() -> Result<Vec<String>, Box<dyn std::error::Error>> {
     // Implementation of network_info function
@@ -31,7 +29,7 @@ async fn network_traffic() -> Result<Vec<String>, Box<dyn std::error::Error>> {
 
     // First measurement
     networks.refresh(true);
-    let mut previous_data: Vec<(String, u64, u64)> = networks
+    let previous_data: Vec<(String, u64, u64)> = networks
         .iter()
         .map(|(name, data)| {
             (

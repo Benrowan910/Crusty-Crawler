@@ -1,9 +1,12 @@
 //Authored by Benjamin Rowan
+//
 // Created for Nagios Enterprises LLC During the 2025 Summer Nintern Program
 // The goal is to understand and create from the ground up, a server side monitoring agent that posts information
 // to a server that can than be used to determine the health of the system you want to monitor.
 //
-// Ultimately the goal is to hook this up with custom XI plugins.
+// Ultimately the goal is to hook this up with custom XI plugins, and to get it to work on multiple operating systems.
+//
+// I only plan on working on this until Blake returns from his vacation.
 
 use eframe::egui;
 use std::net::SocketAddr;
@@ -246,63 +249,199 @@ async fn status(server_state: Arc<Mutex<ServerState>>) -> String {
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Crusty Server Configuration");
+            // Header section with icon and title
+            ui.horizontal(|ui| {
+                ui.heading("🦀 Crusty Server");
+                ui.label("v1.0.0");
+            });
+            ui.separator();
 
+            // Server configuration section
+            ui.vertical(|ui| {
+                ui.heading("Server Configuration");
+
+                egui::Frame::group(ui.style())
+                    .inner_margin(egui::Margin::same(10))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("Port:")
+                                .on_hover_text("Port number for the web server");
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.port_input)
+                                    .desired_width(80.0),
+                            );
+
+                            // Visual port validation
+                            if self.port_input.parse::<u16>().is_err() {
+                                ui.colored_label(egui::Color32::RED, "❌ Invalid port");
+                            } else {
+                                ui.colored_label(egui::Color32::GREEN, "✅ Valid");
+                            }
+                        });
+                    });
+            });
+            ui.separator();
+
+            // Server control section
+            ui.vertical(|ui| {
+                ui.heading("Server Control");
+
+                let (is_running, current_port) = {
+                    let state = self.server_state.lock().unwrap();
+                    (state.is_running, state.port)
+                };
+
+                ui.horizontal(|ui| {
+                    if !is_running {
+                        if ui
+                            .add(
+                                egui::Button::new("🚀 Start Server")
+                                    .fill(egui::Color32::from_rgb(46, 125, 50)),
+                            )
+                            .clicked()
+                        {
+                            self.start_server();
+                        }
+                    } else {
+                        if ui
+                            .add(
+                                egui::Button::new("🛑 Stop Server")
+                                    .fill(egui::Color32::from_rgb(211, 47, 47)),
+                            )
+                            .clicked()
+                        {
+                            self.stop_server();
+                        }
+                    }
+
+                    // Status indicator
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if is_running {
+                            ui.colored_label(
+                                egui::Color32::GREEN,
+                                format!("● Running on port {}", current_port),
+                            );
+                        } else {
+                            ui.colored_label(egui::Color32::GRAY, "● Stopped");
+                        }
+                    });
+                });
+
+                // Status message with better styling
+                if !self.status_message.is_empty() {
+                    ui.separator();
+                    egui::Frame::group(ui.style())
+                        .fill(egui::Color32::from_rgba_unmultiplied(30, 30, 30, 100))
+                        .inner_margin(egui::Margin::same(8))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label("📢");
+                                ui.label(&self.status_message);
+                            });
+                        });
+                }
+            });
+
+            // Server information section (only when running)
             let (is_running, current_port, last_update) = {
                 let state = self.server_state.lock().unwrap();
                 let hardware_state = state.hardware_state.lock().unwrap();
                 let last_update = hardware_state.last_update.elapsed().as_secs();
                 (state.is_running, state.port, last_update)
-            }; // Releases the lock intrinsically
-
-            // Port configuration
-            ui.horizontal(|ui| {
-                ui.label("Port:");
-                ui.text_edit_singleline(&mut self.port_input).enabled();
-            });
-
-            // Control buttons
-            ui.horizontal(|ui| {
-                if !is_running {
-                    if ui.button("🚀 Host Server").clicked() {
-                        self.start_server();
-                    }
-                } else {
-                    if ui.button("🛑 Stop Server").clicked() {
-                        self.stop_server();
-                    }
-                }
-            });
-
-            // Status display
-            if !self.status_message.is_empty() {
-                ui.separator();
-                ui.label(&self.status_message);
-            }
+            };
 
             if is_running {
                 ui.separator();
-                ui.label("📊 Server Information:");
-                ui.label(format!("• Port: {}", current_port));
-                ui.label(format!("• Local URL: http://localhost:{}", current_port));
-                ui.label(format!("• Network URL: http://[YOUR-IP]:{}", current_port));
-                ui.label("• Replace [YOUR-IP] with your computer's IP address");
-                ui.label("• Accessible from any device on your network!");
+                ui.vertical(|ui| {
+                    ui.heading("📊 Server Information");
 
-                // Show hardware monitoring status
-                ui.separator();
-                ui.label("🔧 Hardware Monitoring:");
-                ui.label(format!("• Last updated: {} seconds ago", last_update));
-                ui.label("• Power and thermal data refreshes every 60s");
+                    egui::Frame::group(ui.style())
+                        .inner_margin(egui::Margin::same(10))
+                        .show(ui, |ui| {
+                            ui.label("📍 Access URLs:");
+                            ui.indent("urls", |ui| {
+                                ui.monospace(format!(
+                                    "Local:    http://localhost:{}",
+                                    current_port
+                                ));
+                                ui.monospace(format!(
+                                    "Network:  http://[YOUR-IP]:{}",
+                                    current_port
+                                ));
+                            });
+
+                            ui.add_space(5.0);
+                            ui.label("💡 Replace [YOUR-IP] with your computer's IP address");
+                            ui.colored_label(
+                                egui::Color32::LIGHT_BLUE,
+                                "🌐 Accessible from any device on your network!",
+                            );
+                        });
+
+                    ui.add_space(10.0);
+
+                    // Hardware monitoring status
+                    ui.heading("🔧 Hardware Monitoring");
+                    egui::Frame::group(ui.style())
+                        .inner_margin(egui::Margin::same(10))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label("Last updated:");
+                                if last_update < 60 {
+                                    ui.colored_label(
+                                        egui::Color32::GREEN,
+                                        format!("{} seconds ago", last_update),
+                                    );
+                                } else {
+                                    ui.colored_label(
+                                        egui::Color32::YELLOW,
+                                        format!("{} seconds ago", last_update),
+                                    );
+                                }
+                            });
+                            ui.label("⏱️ Power and thermal data refreshes every 60s");
+                        });
+                });
             }
 
-            // Instructions
+            // Instructions section
             ui.separator();
-            ui.label("💡 Instructions:");
-            ui.label("1. Enter a port number (default: 3000)");
-            ui.label("2. Click 'Host Server' to start");
-            ui.label("3. Access the status page from any browser");
-            ui.label("4. Use 'Stop Server' to shut down");
+            ui.vertical(|ui| {
+                ui.heading("💡 Instructions");
+
+                egui::Frame::group(ui.style())
+                    .fill(egui::Color32::from_rgba_unmultiplied(25, 25, 35, 100))
+                    .inner_margin(egui::Margin::same(10))
+                    .show(ui, |ui| {
+                        ui.vertical(|ui| {
+                            ui.horizontal(|ui| {
+                                ui.label("1.");
+                                ui.label("Enter a port number (default: 3000)");
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("2.");
+                                ui.label("Click 'Start Server' to begin hosting");
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("3.");
+                                ui.label("Access the status page from any browser");
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("4.");
+                                ui.label("Use 'Stop Server' to shut down");
+                            });
+                        });
+                    });
+            });
+
+            // Footer
+            ui.separator();
+            ui.horizontal(|ui| {
+                ui.small("Created for Nagios Enterprises LLC • 2025 Summer Nintern Program");
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.small("🦀 Powered by Rust");
+                });
+            });
         });
     }
 }
