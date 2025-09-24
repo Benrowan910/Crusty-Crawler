@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>System Status</title>
+        <style>
+            body {
+                font-family: monospace;
+                background: #1e1e1e;
+                color: #00ff99;
+                padding: 20px;
+            }
+            pre {
+                white-space: pre-wrap;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>System Status</h1>
+        <pre id="status">Loading...</pre>
+
+        <script>
+            async function fetchStatus() {
+                try {
+                    let res = await fetch("/api/status");
+                    let text = await res.text();
+                    document.getElementById("status").textContent = text;
+                } catch (err) {
+                    document.getElementById("status").textContent =
+                        "Error: " + err;
+                }
+            }
+
+            fetchStatus(); // initial load
+            setInterval(fetchStatus, 5000); // update every 5s
+        </script>
+    </body>
+</html>

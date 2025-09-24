@@ -1,0 +1,17 @@
+[package]
+name = "RustSystemChecker"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8.4"
+eframe = "0.32.3"
+egui = "0.32.3"
+h2 = "0.4.12"
+hardware-query = {version = "0.2.1", features = ["monitoring"]}
+hyper = "1.7.0"
+sysinfo = "0.37.0"
+systemstat = "0.2.5"
+tokio = { version = "1.47.1", features = ["full"] }
+tower-http = { version = "0.6.6", features = ["fs"] }
+warp = "0.4.2"
