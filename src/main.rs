@@ -1,23 +1,31 @@
-// main.rs
+//Authored by Benjamin Rowan
+// Created for Nagios Enterprises LLC During the 2025 Summer Nintern Program
+// The goal is to understand and create from the ground up, a server side monitoring agent that posts information
+// to a server that can than be used to determine the health of the system you want to monitor.
+//
+// Ultimately the goal is to hook this up with custom XI plugins.
+
 use eframe::egui;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 
-// Import your Axum server components
+// Axum Server Components
 use axum::{Router, response::Html, routing::get};
 use tower_http::services::ServeDir;
 
-// Include your network module
+// Includes
 include!("network.rs");
 include!("components.rs");
 include!("disks.rs");
+include!("hardware_statistics.rs");
 
 // Shared state between GUI and server
 struct ServerState {
     is_running: bool,
     port: u16,
     shutdown_sender: Option<tokio::sync::oneshot::Sender<()>>,
+    hardware_state: Arc<Mutex<HardwareMonitorState>>,
 }
 
 impl Default for ServerState {
@@ -26,6 +34,7 @@ impl Default for ServerState {
             is_running: false,
             port: 3000,
             shutdown_sender: None,
+            hardware_state: Arc::new(Mutex::new(HardwareMonitorState::default())),
         }
     }
 }
@@ -66,7 +75,7 @@ impl MyApp {
             }
         }
 
-        // Create a new runtime for the server
+        // Creates a new runtime for the server
         let rt = Runtime::new().unwrap();
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
@@ -82,7 +91,7 @@ impl MyApp {
         // Spawn the server in a separate thread
         std::thread::spawn(move || {
             rt.block_on(async {
-                let app = create_app();
+                let app = create_app(server_state_clone.clone());
                 let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
                 println!("🚀 Server starting on port {}", port);
@@ -122,6 +131,7 @@ impl MyApp {
         );
     }
 
+    //function to send the shutdown signal to the server
     fn stop_server(&mut self) {
         let shutdown_sender = {
             let mut state = self.server_state.lock().unwrap();
@@ -144,20 +154,20 @@ impl MyApp {
     }
 }
 
-// Create your Axum application
-fn create_app() -> Router {
+// Axum apllication and routing of information
+fn create_app(server_state: Arc<Mutex<ServerState>>) -> Router {
     Router::new()
-        .route("/api/status", get(status_handler))
+        .route("/api/status", get(move || status_handler(server_state)))
         .fallback_service(ServeDir::new("public"))
 }
 
-// Your status endpoint handler
-async fn status_handler() -> Html<String> {
-    Html(status().await)
+// Endpoint handler
+async fn status_handler(server_state: Arc<Mutex<ServerState>>) -> Html<String> {
+    Html(status(server_state).await)
 }
 
-// Your existing status function
-async fn status() -> String {
+// Display the system statistics collected
+async fn status(server_state: Arc<Mutex<ServerState>>) -> String {
     let mut sys = sysinfo::System::new_all();
     sys.refresh_all();
 
@@ -171,6 +181,8 @@ async fn status() -> String {
         sys.used_memory() / 1024 / 1024
     ));
     out.push_str(&format!("CPU usage: {:.1}%\n", sys.global_cpu_usage()));
+
+    out.push_str(&get_hardware_status(&server_state));
 
     // Fetch network info
     match network_info().await {
@@ -234,13 +246,14 @@ async fn status() -> String {
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("System Status Server Configuration");
+            ui.heading("Crusty Server Configuration");
 
-            // Get current server state
-            let state = self.server_state.lock().unwrap();
-            let is_running = state.is_running;
-            let current_port = state.port;
-            drop(state); // Release the lock
+            let (is_running, current_port, last_update) = {
+                let state = self.server_state.lock().unwrap();
+                let hardware_state = state.hardware_state.lock().unwrap();
+                let last_update = hardware_state.last_update.elapsed().as_secs();
+                (state.is_running, state.port, last_update)
+            }; // Releases the lock intrinsically
 
             // Port configuration
             ui.horizontal(|ui| {
@@ -275,6 +288,12 @@ impl eframe::App for MyApp {
                 ui.label(format!("• Network URL: http://[YOUR-IP]:{}", current_port));
                 ui.label("• Replace [YOUR-IP] with your computer's IP address");
                 ui.label("• Accessible from any device on your network!");
+
+                // Show hardware monitoring status
+                ui.separator();
+                ui.label("🔧 Hardware Monitoring:");
+                ui.label(format!("• Last updated: {} seconds ago", last_update));
+                ui.label("• Power and thermal data refreshes every 60s");
             }
 
             // Instructions
@@ -290,12 +309,19 @@ impl eframe::App for MyApp {
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([400.0, 500.0]),
+        viewport: egui::ViewportBuilder::default().with_icon(std::sync::Arc::new(egui::IconData {
+            rgba: image::load_from_memory(include_bytes!("../Assets/icon.png"))
+                .unwrap()
+                .to_rgba8()
+                .to_vec(),
+            width: 250,
+            height: 325,
+        })),
         ..Default::default()
     };
 
     eframe::run_native(
-        "System Status Server",
+        "Crusty Server",
         options,
         Box::new(|_cc| Ok(Box::<MyApp>::default())),
     )

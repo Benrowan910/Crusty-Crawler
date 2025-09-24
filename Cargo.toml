@@ -10,6 +10,7 @@ egui = "0.32.3"
 h2 = "0.4.12"
 hardware-query = {version = "0.2.1", features = ["monitoring"]}
 hyper = "1.7.0"
+image = "0.25.8"
 sysinfo = "0.37.0"
 systemstat = "0.2.5"
 tokio = { version = "1.47.1", features = ["full"] }
