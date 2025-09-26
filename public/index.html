@@ -20,11 +20,30 @@
         <pre id="status">Loading...</pre>
 
         <script>
+            function getToken() {
+                const urlParams = new URLSearchParams(window.location.search);
+                return urlParams.get("token");
+            }
+
             async function fetchStatus() {
+                const token = getToken();
+                if (!token) {
+                    document.getElementById("status").textContent =
+                        "Error: No access token provided";
+                    return;
+                }
+
                 try {
-                    let res = await fetch("/api/status");
-                    let text = await res.text();
-                    document.getElementById("status").textContent = text;
+                    let res = await fetch(
+                        "/api/status?token=" + encodeURIComponent(token),
+                    );
+                    if (res.ok) {
+                        let text = await res.text();
+                        document.getElementById("status").textContent = text;
+                    } else {
+                        document.getElementById("status").textContent =
+                            "Error: Unauthorized - Invalid token";
+                    }
                 } catch (err) {
                     document.getElementById("status").textContent =
                         "Error: " + err;

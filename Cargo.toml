@@ -5,12 +5,18 @@ edition = "2024"
 
 [dependencies]
 axum = "0.8.4"
+bcrypt = "0.17.1"
+chrono = {version ="0.4.42", features = ["serde"]}
 eframe = "0.32.3"
 egui = "0.32.3"
 h2 = "0.4.12"
 hardware-query = {version = "0.2.1", features = ["monitoring"]}
 hyper = "1.7.0"
 image = "0.25.8"
+lettre = "0.11.18"
+rand = "0.9.2"
+serde = "1.0.227"
+serde_json = "1.0.145"
 sysinfo = "0.37.0"
 systemstat = "0.2.5"
 tokio = { version = "1.47.1", features = ["full"] }

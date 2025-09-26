@@ -80,6 +80,7 @@ pub fn update_hardware_info(hardware_state: &mut HardwareMonitorState) {
     }
 }
 
+#[warn(private_interfaces)]
 pub fn get_hardware_status(server_state: &std::sync::Mutex<crate::ServerState>) -> String {
     let mut output = String::new();
 
