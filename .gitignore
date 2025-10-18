@@ -1,3 +1,5 @@
 /target
+/dist
 
+*.md
 crusty_auth.json

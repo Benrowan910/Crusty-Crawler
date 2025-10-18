@@ -12,6 +12,7 @@ use eframe::egui;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
+use std::env;
 
 // Axum Server Components
 use axum::{Router, extract::Query, http::StatusCode, response::Html, routing::get};
@@ -24,6 +25,7 @@ include!("components.rs");
 include!("disks.rs");
 include!("hardware_statistics.rs");
 include!("auth.rs");
+include!("cli.rs");
 
 // Web parameters query
 #[derive(Deserialize)]
@@ -76,6 +78,7 @@ struct SetupState {
 struct LoginState {
     username: String,
     password: String,
+    email: String,
     error_message: String,
     show_recovery: bool,
 }
@@ -229,6 +232,7 @@ impl Default for MyApp {
             AppState::Login(LoginState {
                 username: String::new(),
                 password: String::new(),
+                email: String::new(),
                 error_message: String::new(),
                 show_recovery: false,
             })
@@ -528,6 +532,7 @@ impl eframe::App for MyApp {
                                     action = AppAction::SwitchToLogin(LoginState {
                                         username: setup_state.username.clone(),
                                         password: String::new(),
+                                        email: String::new(),
                                         error_message: String::new(),
                                         show_recovery: false,
                                     });
@@ -595,13 +600,13 @@ impl eframe::App for MyApp {
 
                         ui.horizontal(|ui| {
                             ui.label("Email:");
-                            ui.text_edit_singleline(&mut login_state.username); // Reusing username field for email in recovery
+                            ui.text_edit_singleline(&mut login_state.email);
                         });
 
                         if ui.button("📧 Send Recovery Email").clicked() {
                             let server_state = self.server_state.lock().unwrap();
                             let auth_manager = server_state.auth_manager.lock().unwrap();
-                            match auth_manager.recover_credentials(&login_state.username) {
+                            match auth_manager.recover_credentials(&login_state.email) {
                                 Ok(()) => {
                                     login_state.error_message =
                                         "Recovery email sent! Check your inbox.".to_string();
@@ -632,6 +637,7 @@ impl eframe::App for MyApp {
                                 action = AppAction::SwitchToLogin(LoginState {
                                     username: String::new(),
                                     password: String::new(),
+                                    email: String::new(),
                                     error_message: String::new(),
                                     show_recovery: false,
                                 });
@@ -879,6 +885,7 @@ impl eframe::App for MyApp {
                         action = AppAction::SwitchToLogin(LoginState {
                             username: String::new(),
                             password: String::new(),
+                            email: String::new(),
                             error_message: String::new(),
                             show_recovery: false,
                         });
@@ -985,22 +992,39 @@ impl eframe::App for MyApp {
     }
 }
 
-fn main() -> Result<(), eframe::Error> {
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_icon(std::sync::Arc::new(egui::IconData {
-            rgba: image::load_from_memory(include_bytes!("../Assets/icon.png"))
-                .unwrap()
-                .to_rgba8()
-                .to_vec(),
-            width: 250,
-            height: 325,
-        })),
-        ..Default::default()
-    };
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Check for CLI mode flags
+    let args: Vec<String> = env::args().collect();
+    
+    // Check for --cli, --no-gui, or daemon flags
+    let cli_mode = args.iter().any(|arg| {
+        matches!(arg.as_str(), "--cli" | "--no-gui" | "--daemon" | "daemon" | "start" | "stop" | "status")
+    });
 
-    eframe::run_native(
-        "Crusty Crawler",
-        options,
-        Box::new(|_cc| Ok(Box::<MyApp>::default())),
-    )
+    if cli_mode {
+        // Run in CLI mode
+        run_cli()?;
+        Ok(())
+    } else {
+        // Run in GUI mode
+        let options = eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default().with_icon(std::sync::Arc::new(egui::IconData {
+                rgba: image::load_from_memory(include_bytes!("../Assets/icon.png"))
+                    .unwrap()
+                    .to_rgba8()
+                    .to_vec(),
+                width: 250,
+                height: 325,
+            })),
+            ..Default::default()
+        };
+
+        eframe::run_native(
+            "Crusty Crawler",
+            options,
+            Box::new(|_cc| Ok(Box::<MyApp>::default())),
+        )?;
+        
+        Ok(())
+    }
 }
